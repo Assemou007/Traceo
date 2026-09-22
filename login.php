@@ -44,25 +44,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              WHERE u.identifiant = ?"
         );
         $stmt->execute([$identifiant]);
-        $user = $stmt->fetch();
+        $candidats = $stmt->fetchAll();
 
-        if (!$user) {
-            $erreur = 'Identifiant ou mot de passe incorrect';
-        } elseif ($user['statut'] !== 'actif') {
-            $erreur = 'Compte inactif — faute de destitution vous n\'êtes plus le responsable. Contactez l\'administration.';
-        } elseif (!password_verify($mdp, $user['mot_de_passe_hash'])) {
-            $erreur = 'Identifiant ou mot de passe incorrect';
-        } else {
+        $user_trouve = null;
+        $compte_inactif = false;
+
+        foreach ($candidats as $candidat) {
+            if (password_verify($mdp, $candidat['mot_de_passe_hash'])) {
+                if ($candidat['statut'] === 'actif') {
+                    $user_trouve = $candidat;
+                    break;
+                } else {
+                    $compte_inactif = true;
+                }
+            }
+        }
+
+        if ($user_trouve) {
             unset($_SESSION['login_bruteforce']);
             session_regenerate_id(true); // anti-fixation de session
-            $_SESSION['utilisateur_id'] = (int)$user['id'];
-            $_SESSION['etablissement_id'] = (int)$user['etablissement_id'];
-            $_SESSION['role'] = $user['role'];
-            $_SESSION['nom_complet'] = $user['prenom'] . ' ' . $user['nom'];
-            $_SESSION['etablissement_nom'] = $user['etablissement_nom'];
+            $_SESSION['utilisateur_id'] = (int)$user_trouve['id'];
+            $_SESSION['etablissement_id'] = (int)$user_trouve['etablissement_id'];
+            $_SESSION['role'] = $user_trouve['role'];
+            $_SESSION['nom_complet'] = $user_trouve['prenom'] . ' ' . $user_trouve['nom'];
+            $_SESSION['etablissement_nom'] = $user_trouve['etablissement_nom'];
 
-            header('Location: ' . dashboard_url_pour_role($user['role']));
+            require_once __DIR__ . '/backend/helpers/audit.php';
+            consigner_audit($pdo, (int)$user_trouve['etablissement_id'], (int)$user_trouve['id'], 'connexion_reussie', 'Connexion Web réussie');
+
+            header('Location: ' . dashboard_url_pour_role($user_trouve['role']));
             exit;
+        } elseif ($compte_inactif) {
+            $erreur = 'Compte inactif — faute de destitution vous n\'êtes plus le responsable. Contactez l\'administration.';
+        } else {
+            $erreur = 'Identifiant ou mot de passe incorrect';
         }
 
         if ($erreur) {

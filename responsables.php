@@ -95,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $_POST['action'] === 'supprimer') {
         $pdo->prepare("DELETE FROM responsable_classe WHERE id = ?")->execute([$id]);
         if ($utilisateur_id) {
 
+            $pdo->prepare("DELETE FROM code_reset WHERE utilisateur_id = ?")->execute([$utilisateur_id]);
             $pdo->prepare("DELETE FROM rapport_periodique WHERE destinataire_id = ?")->execute([$utilisateur_id]);
             $pdo->prepare("DELETE FROM punition WHERE gere_par = ?")->execute([$utilisateur_id]);
             $pdo->prepare("UPDATE utilisateur SET created_by = NULL WHERE created_by = ?")->execute([$utilisateur_id]);

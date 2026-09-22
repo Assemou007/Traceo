@@ -191,6 +191,7 @@ CREATE TABLE seance (
     date DATE NOT NULL,
     contenu_texte TEXT NULL,                    -- si mode libre
     chapitre_id INT NULL,                        -- si mode programme_importe
+    statut_seance ENUM('tenue','annulee_prof','jour_ferie') NOT NULL DEFAULT 'tenue',
     statut_validation ENUM('en_attente','validee','forcee_censeur') NOT NULL DEFAULT 'en_attente',
     valide_par INT NULL,                          -- FK responsable_classe.id
     valide_le TIMESTAMP NULL,
@@ -200,7 +201,8 @@ CREATE TABLE seance (
     FOREIGN KEY (chapitre_id) REFERENCES programme_chapitre(id),
     FOREIGN KEY (valide_par) REFERENCES responsable_classe(id),
     UNIQUE KEY uniq_seance_jour (creneau_id, date),
-    INDEX idx_date (date)
+    INDEX idx_date (date),
+    INDEX idx_seance_statut (statut_validation)
 );
 
 -- ============ PRÉSENCES ============
@@ -218,7 +220,8 @@ CREATE TABLE presence (
     FOREIGN KEY (eleve_id) REFERENCES eleve(id),
     FOREIGN KEY (saisi_par) REFERENCES utilisateur(id),
     UNIQUE KEY uniq_presence (seance_id, eleve_id),
-    INDEX idx_eleve (eleve_id)
+    INDEX idx_eleve (eleve_id),
+    INDEX idx_presence_statut (seance_id, statut)
 );
 
 -- ============ PUNITIONS ============
@@ -275,6 +278,21 @@ CREATE TABLE code_reset (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (utilisateur_id) REFERENCES utilisateur(id),
     INDEX idx_utilisateur (utilisateur_id)
+);
+
+-- ============ JOURNAL D'AUDIT / SÉCURITÉ ============
+
+CREATE TABLE journal_audit (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    etablissement_id INT NOT NULL,
+    utilisateur_id INT NULL,
+    action VARCHAR(100) NOT NULL,
+    details TEXT NULL,
+    adresse_ip VARCHAR(45) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (etablissement_id) REFERENCES etablissement(id),
+    FOREIGN KEY (utilisateur_id) REFERENCES utilisateur(id),
+    INDEX idx_etab_action (etablissement_id, action)
 );
 
 -- ============ SEED : quelques pays de départ ============

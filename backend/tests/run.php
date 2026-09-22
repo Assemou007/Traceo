@@ -60,6 +60,11 @@ t('jeton invalide rejeté', csrf_valide() === false);
 $_POST = [];
 t('absence de jeton rejetée', csrf_valide() === false);
 
+// Mock PDO pour verifier_ressource sans BDD
+class DummyPdo extends PDO { function __construct() {} }
+$dummyPdo = new DummyPdo();
+t('table non autorisée rejetée dans verifier_ressource', verifier_ressource($dummyPdo, 'invalid_table; DROP TABLE users;', 1, 1) === false);
+
 // ---------- Base de données (optionnel) ----------
 echo "\n— Multi-tenant (base requise, sinon ignoré)\n";
 try {

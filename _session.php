@@ -55,6 +55,8 @@ function require_csrf(?string $retour = null): void {
  */
 function verifier_ressource(PDO $pdo, string $table, int $id, int $etab_id): bool {
     if ($id <= 0) return false;
+    $tables_autorisees = ['eleve', 'classe', 'matiere', 'filiere', 'utilisateur', 'annee_scolaire', 'creneau', 'seance', 'punition', 'responsable_classe', 'notification', 'programme_importe'];
+    if (!in_array($table, $tables_autorisees, true)) return false;
     $stmt = $pdo->prepare("SELECT id FROM `$table` WHERE id = ? AND etablissement_id = ?");
     $stmt->execute([$id, $etab_id]);
     return (bool)$stmt->fetch();

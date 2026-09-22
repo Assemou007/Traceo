@@ -46,7 +46,19 @@ function lire_xlsx(string $chemin): ?array {
     $sharedStrings = [];
     if ($ssContent !== false) {
         $ssXml = simplexml_load_string($ssContent, 'SimpleXMLElement', LIBXML_NONET);
-        if ($ssXml) foreach ($ssXml->si as $si) $sharedStrings[] = (string)$si->t;
+        if ($ssXml) {
+            foreach ($ssXml->si as $si) {
+                if (isset($si->t) && (string)$si->t !== '') {
+                    $sharedStrings[] = (string)$si->t;
+                } else {
+                    $text = '';
+                    foreach ($si->r as $r) {
+                        $text .= (string)$r->t;
+                    }
+                    $sharedStrings[] = $text;
+                }
+            }
+        }
     }
     $sheetXml = simplexml_load_string($sheetContent, 'SimpleXMLElement', LIBXML_NONET);
     if (!$sheetXml) return null;

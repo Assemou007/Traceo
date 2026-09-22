@@ -23,13 +23,22 @@ if (!$check->fetch()) {
     exit;
 }
 
+$statut_seance = $_POST['statut_seance'] ?? 'tenue';
+if (!in_array($statut_seance, ['tenue', 'annulee_prof', 'jour_ferie'], true)) {
+    $statut_seance = 'tenue';
+}
+
+if ($statut_seance !== 'tenue' && $contenu_texte === '') {
+    $contenu_texte = ($statut_seance === 'annulee_prof') ? 'Cours non assuré — Professeur absent' : 'Jour férié — Aucun cours';
+}
+
 if ($contenu_texte !== '') {
     $pdo->prepare(
-        "INSERT INTO seance (creneau_id, date, contenu_texte, statut_validation)
-         VALUES (?, ?, ?, 'en_attente')
-         ON DUPLICATE KEY UPDATE contenu_texte = VALUES(contenu_texte)"
-    )->execute([$creneau_id, $date, $contenu_texte]);
-    $_SESSION['_flash_succes'] = 'Cahier de texte enregistré.';
+        "INSERT INTO seance (creneau_id, date, contenu_texte, statut_seance, statut_validation)
+         VALUES (?, ?, ?, ?, 'en_attente')
+         ON DUPLICATE KEY UPDATE contenu_texte = VALUES(contenu_texte), statut_seance = VALUES(statut_seance)"
+    )->execute([$creneau_id, $date, $contenu_texte, $statut_seance]);
+    $_SESSION['_flash_succes'] = ($statut_seance === 'tenue') ? 'Cahier de texte enregistré.' : 'Statut de la séance enregistré.';
 } else {
     $_SESSION['_flash_erreur'] = 'Le contenu ne peut pas être vide.';
 }

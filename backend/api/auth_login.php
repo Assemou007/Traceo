@@ -28,9 +28,17 @@ $stmt = $pdo->prepare(
      WHERE u.identifiant = ? AND u.statut = 'actif'"
 );
 $stmt->execute([$identifiant]);
-$user = $stmt->fetch();
+$candidats = $stmt->fetchAll();
 
-if (!$user || !password_verify($mot_de_passe, $user['mot_de_passe_hash'])) {
+$user = null;
+foreach ($candidats as $candidat) {
+    if (password_verify($mot_de_passe, $candidat['mot_de_passe_hash'])) {
+        $user = $candidat;
+        break;
+    }
+}
+
+if (!$user) {
     send_json(['error' => 'Identifiants incorrects'], 401);
 }
 

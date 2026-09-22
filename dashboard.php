@@ -62,23 +62,27 @@ $stats['profs']->execute([$etab_id]); $stats['profs'] = (int)$stats['profs']->fe
 $stats['classes'] = $pdo->prepare("SELECT COUNT(*) FROM classe WHERE etablissement_id = ? AND annee_scolaire_id = ?");
 $stats['classes']->execute([$etab_id, $annee_id]); $stats['classes'] = (int)$stats['classes']->fetchColumn();
 
-$stats['absences_ajd'] = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN seance s ON s.id = p.seance_id JOIN creneau cr ON cr.id = s.creneau_id WHERE s.date = CURDATE() AND p.statut = 'absent' AND cr.etablissement_id = ?");
-$stats['absences_ajd']->execute([$etab_id]); $stats['absences_ajd'] = (int)$stats['absences_ajd']->fetchColumn();
+// Requetes de synthese consolidees
+$q_pres = $pdo->prepare("SELECT 
+    SUM(CASE WHEN s.date = CURDATE() AND p.statut = 'absent' THEN 1 ELSE 0 END) AS abs_ajd,
+    SUM(CASE WHEN s.date = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND p.statut = 'absent' THEN 1 ELSE 0 END) AS abs_hier,
+    SUM(CASE WHEN s.date = CURDATE() AND p.statut = 'retard' THEN 1 ELSE 0 END) AS ret_ajd,
+    SUM(CASE WHEN s.date = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND p.statut = 'retard' THEN 1 ELSE 0 END) AS ret_hier
+    FROM presence p JOIN seance s ON s.id = p.seance_id JOIN creneau cr ON cr.id = s.creneau_id WHERE cr.etablissement_id = ? AND s.date >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)");
+$q_pres->execute([$etab_id]);
+$res_pres = $q_pres->fetch(PDO::FETCH_ASSOC) ?: [];
 
-$stats['absences_hier'] = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN seance s ON s.id = p.seance_id JOIN creneau cr ON cr.id = s.creneau_id WHERE s.date = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND p.statut = 'absent' AND cr.etablissement_id = ?");
-$stats['absences_hier']->execute([$etab_id]); $stats['absences_hier'] = (int)$stats['absences_hier']->fetchColumn();
+$stats['absences_ajd'] = (int)($res_pres['abs_ajd'] ?? 0);
+$stats['absences_hier'] = (int)($res_pres['abs_hier'] ?? 0);
+$stats['retards_ajd'] = (int)($res_pres['ret_ajd'] ?? 0);
+$stats['retards_hier'] = (int)($res_pres['ret_hier'] ?? 0);
 
-$stats['attente'] = $pdo->prepare("SELECT COUNT(*) FROM seance s JOIN creneau c ON c.id = s.creneau_id WHERE c.etablissement_id = ? AND s.statut_validation = 'en_attente'");
-$stats['attente']->execute([$etab_id]); $stats['attente'] = (int)$stats['attente']->fetchColumn();
+$q_seances = $pdo->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN s.statut_validation = 'en_attente' THEN 1 ELSE 0 END) AS attente FROM seance s JOIN creneau c ON c.id = s.creneau_id WHERE c.etablissement_id = ?");
+$q_seances->execute([$etab_id]);
+$res_seances = $q_seances->fetch(PDO::FETCH_ASSOC) ?: [];
 
-$stats['seances_total'] = $pdo->prepare("SELECT COUNT(*) FROM seance s JOIN creneau c ON c.id = s.creneau_id WHERE c.etablissement_id = ?");
-$stats['seances_total']->execute([$etab_id]); $stats['seances_total'] = (int)$stats['seances_total']->fetchColumn();
-
-$stats['retards_ajd'] = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN seance s ON s.id = p.seance_id JOIN creneau cr ON cr.id = s.creneau_id WHERE s.date = CURDATE() AND p.statut = 'retard' AND cr.etablissement_id = ?");
-$stats['retards_ajd']->execute([$etab_id]); $stats['retards_ajd'] = (int)$stats['retards_ajd']->fetchColumn();
-
-$stats['retards_hier'] = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN seance s ON s.id = p.seance_id JOIN creneau cr ON cr.id = s.creneau_id WHERE s.date = DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND p.statut = 'retard' AND cr.etablissement_id = ?");
-$stats['retards_hier']->execute([$etab_id]); $stats['retards_hier'] = (int)$stats['retards_hier']->fetchColumn();
+$stats['seances_total'] = (int)($res_seances['total'] ?? 0);
+$stats['attente'] = (int)($res_seances['attente'] ?? 0);
 
 $stats['punitions'] = $pdo->prepare("SELECT COUNT(*) FROM punition p JOIN eleve e ON e.id = p.eleve_id WHERE e.etablissement_id = ? AND p.statut = 'a_faire'");
 $stats['punitions']->execute([$etab_id]); $stats['punitions'] = (int)$stats['punitions']->fetchColumn();

@@ -29,11 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_valide()) {
         $limite['demandes']++;
         $_SESSION['reset_limite'] = $limite;
 
-        $user = null;
         $stmt = $pdo->prepare("SELECT id, telephone, prenom, nom FROM utilisateur WHERE identifiant = ? AND statut = 'actif'");
         $stmt->execute([$identifiant]);
         $users = $stmt->fetchAll();
-        if (count($users) === 1) $user = $users[0];
+        // S'il y a un seul utilisateur ou si plusieurs ont des numéros différents, on prend le premier qui a un téléphone
+        foreach ($users as $candidate) {
+            if (!empty($candidate['telephone'])) {
+                $user = $candidate;
+                break;
+            }
+        }
 
         if ($user && !empty($user['telephone'])) {
             // Invalide les anciens codes non utilisés
@@ -59,7 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_valide()) {
     $nouveau = $_POST['nouveau_mot_de_passe'] ?? '';
     $confirmation = $_POST['confirmation'] ?? '';
 
-    if (!preg_match('/^\d{6}$/', $code)) {
+    // Anti brute-force sur la saisie du code OTP
+    $otp_bruteforce = $_SESSION['otp_echecs'] ?? 0;
+
+    if ($otp_bruteforce >= 5) {
+        $erreur = 'Nombre maximal d\'essais dépassé. Veuillez faire une nouvelle demande de code.';
+        $etape = 1;
+    } elseif (!preg_match('/^\d{6}$/', $code)) {
         $erreur = 'Le code doit contenir exactement 6 chiffres.';
         $etape = 2;
     } elseif (strlen($nouveau) < 8) {
@@ -72,26 +83,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !csrf_valide()) {
         $stmt = $pdo->prepare("SELECT id FROM utilisateur WHERE identifiant = ? AND statut = 'actif'");
         $stmt->execute([$identifiant]);
         $users = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $user_id = count($users) === 1 ? (int)$users[0] : null;
 
-        if (!$user_id) {
-            $erreur = 'Code invalide ou expiré.';
+        $valide = false;
+        $matched_user_id = null;
+        $matched_code_id = null;
+
+        if (!empty($users)) {
+            $inClause = implode(',', array_fill(0, count($users), '?'));
+            $stmtCode = $pdo->prepare("SELECT id, utilisateur_id, code_hash FROM code_reset WHERE utilisateur_id IN ($inClause) AND utilise = 0 AND expire_le > NOW() ORDER BY id DESC");
+            $stmtCode->execute($users);
+            $codes = $stmtCode->fetchAll();
+
+            foreach ($codes as $row) {
+                if (password_verify($code, $row['code_hash'])) {
+                    $valide = true;
+                    $matched_user_id = (int)$row['utilisateur_id'];
+                    $matched_code_id = (int)$row['id'];
+                    break;
+                }
+            }
+        }
+
+        if (!$valide) {
+            $_SESSION['otp_echecs'] = $otp_bruteforce + 1;
+            $restants = 5 - $_SESSION['otp_echecs'];
+            $erreur = 'Code invalide ou expiré.' . ($restants > 0 ? " ($restants tentative(s) restante(s))" : '');
             $etape = 2;
         } else {
-            $stmt = $pdo->prepare("SELECT id, code_hash FROM code_reset WHERE utilisateur_id = ? AND utilise = 0 AND expire_le > NOW() ORDER BY id DESC LIMIT 1");
-            $stmt->execute([$user_id]);
-            $row = $stmt->fetch();
-            if (!$row || !password_verify($code, $row['code_hash'])) {
-                $erreur = 'Code invalide ou expiré.';
-                $etape = 2;
-            } else {
-                $pdo->prepare("UPDATE code_reset SET utilise = 1 WHERE id = ?")->execute([$row['id']]);
-                $pdo->prepare("UPDATE utilisateur SET mot_de_passe_hash = ? WHERE id = ?")
-                    ->execute([password_hash($nouveau, PASSWORD_DEFAULT), $user_id]);
-                unset($_SESSION['reset_limite']);
-                header('Location: login.php?reset=1');
-                exit;
-            }
+            unset($_SESSION['otp_echecs']);
+            $pdo->prepare("UPDATE code_reset SET utilise = 1 WHERE id = ?")->execute([$matched_code_id]);
+            $pdo->prepare("UPDATE utilisateur SET mot_de_passe_hash = ? WHERE id = ?")
+                ->execute([password_hash($nouveau, PASSWORD_DEFAULT), $matched_user_id]);
+            unset($_SESSION['reset_limite']);
+            header('Location: login.php?reset=1');
+            exit;
         }
     }
 }
