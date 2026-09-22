@@ -426,6 +426,23 @@ require_once __DIR__ . '/inc/header.php';
     const chartPunitions = getComputedStyle(document.documentElement).getPropertyValue('--chart-punitions').trim() || '#A855F7';
     const chartClasses  = getComputedStyle(document.documentElement).getPropertyValue('--chart-classes').trim() || '#F59E0B';
 
+    // Count-up animation for KPI cards
+    document.querySelectorAll('.stat-value').forEach(el => {
+        const target = parseInt(el.textContent.trim(), 10);
+        if (isNaN(target) || target === 0) return;
+        const duration = 1000;
+        const startTime = performance.now();
+        function update(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            el.textContent = Math.floor(ease * target);
+            if (progress < 1) requestAnimationFrame(update);
+            else el.textContent = target;
+        }
+        requestAnimationFrame(update);
+    });
+
     function resizeCanvas(canvas) {
         const rect = canvas.parentElement.getBoundingClientRect();
         const w = canvas.clientWidth || rect.width - 8;
@@ -440,65 +457,106 @@ require_once __DIR__ . '/inc/header.php';
     function drawLineChart(canvasId, labels, series) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
-        const { ctx, w, h } = resizeCanvas(canvas);
-        const maxVal = Math.max(1, ...series.flatMap(s => s.values));
-        const max = Math.ceil(maxVal / 5) * 5;
-        const pad = { top: 14, bottom: 26, left: 34, right: 12 };
-        const cw = w - pad.left - pad.right;
-        const ch = h - pad.top - pad.bottom;
-        const n = labels.length;
-        const xAt = i => pad.left + (n > 1 ? cw * i / (n - 1) : cw / 2);
-        const yAt = v => pad.top + ch - ch * (v / max);
 
-        ctx.font = '10px sans-serif';
-        ctx.strokeStyle = '#E2E8F0';
-        ctx.lineWidth = 1;
-        for (let g = 0; g <= 4; g++) {
-            const y = pad.top + ch * g / 4;
-            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
-            ctx.fillStyle = '#8899AA';
-            ctx.textAlign = 'right';
-            ctx.fillText(String(Math.round(max - max * g / 4)), pad.left - 6, y + 3);
-        }
+        const startTime = performance.now();
+        const duration = 1100;
 
-        ctx.textAlign = 'center';
-        const pasLabel = Math.max(1, Math.ceil(n / 8));
-        for (let i = 0; i < n; i++) {
-            if (i % pasLabel === 0 || i === n - 1) {
+        function render(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            const { ctx, w, h } = resizeCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const maxVal = Math.max(1, ...series.flatMap(s => s.values));
+            const max = Math.ceil(maxVal / 5) * 5;
+            const pad = { top: 14, bottom: 26, left: 34, right: 12 };
+            const cw = w - pad.left - pad.right;
+            const ch = h - pad.top - pad.bottom;
+            const n = labels.length;
+            const xAt = i => pad.left + (n > 1 ? cw * i / (n - 1) : cw / 2);
+            const yAt = v => pad.top + ch - ch * (v / max);
+
+            // Grid lines
+            ctx.font = '10px sans-serif';
+            ctx.strokeStyle = 'rgba(226, 232, 240, 0.6)';
+            ctx.lineWidth = 1;
+            for (let g = 0; g <= 4; g++) {
+                const y = pad.top + ch * g / 4;
+                ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
                 ctx.fillStyle = '#8899AA';
-                ctx.fillText(labels[i], xAt(i), pad.top + ch + 14);
+                ctx.textAlign = 'right';
+                ctx.fillText(String(Math.round(max - max * g / 4)), pad.left - 6, y + 3);
             }
-        }
 
-        series.forEach(function(s) {
-            ctx.strokeStyle = s.color;
-            ctx.lineWidth = 2.5;
-            ctx.setLineDash(s.dash ? [7, 5] : []);
-            ctx.beginPath();
+            // X Labels
+            ctx.textAlign = 'center';
+            const pasLabel = Math.max(1, Math.ceil(n / 8));
             for (let i = 0; i < n; i++) {
-                const x = xAt(i), y = yAt(s.values[i]);
-                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            for (let i = 0; i < n; i++) {
-                const x = xAt(i), y = yAt(s.values[i]);
-                ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-                ctx.fillStyle = s.color; ctx.fill();
-                ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.stroke();
-            }
-
-            if (n <= 31) {
-                ctx.fillStyle = s.color;
-                ctx.font = 'bold 9px sans-serif';
-                ctx.textAlign = 'center';
-                for (let i = 0; i < n; i++) {
-                    if (s.values[i] === 0) continue;
-                    ctx.fillText(String(s.values[i]), xAt(i), yAt(s.values[i]) - 6);
+                if (i % pasLabel === 0 || i === n - 1) {
+                    ctx.fillStyle = '#8899AA';
+                    ctx.fillText(labels[i], xAt(i), pad.top + ch + 14);
                 }
             }
-        });
+
+            // Series drawing
+            series.forEach(function(s) {
+                const animatedValues = s.values.map(v => v * ease);
+
+                // Area Gradient
+                const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+                grad.addColorStop(0, s.color + '33');
+                grad.addColorStop(1, s.color + '00');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(xAt(0), pad.top + ch);
+                for (let i = 0; i < n; i++) {
+                    ctx.lineTo(xAt(i), yAt(animatedValues[i]));
+                }
+                ctx.lineTo(xAt(n - 1), pad.top + ch);
+                ctx.closePath();
+                ctx.fill();
+
+                // Stroke line
+                ctx.strokeStyle = s.color;
+                ctx.lineWidth = 2.5;
+                ctx.setLineDash(s.dash ? [7, 5] : []);
+                ctx.beginPath();
+                for (let i = 0; i < n; i++) {
+                    const x = xAt(i), y = yAt(animatedValues[i]);
+                    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Points
+                for (let i = 0; i < n; i++) {
+                    const x = xAt(i), y = yAt(animatedValues[i]);
+                    ctx.beginPath(); ctx.arc(x, y, 3.5 * ease, 0, Math.PI * 2);
+                    ctx.fillStyle = s.color; ctx.fill();
+                    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.stroke();
+                }
+
+                // Numbers above points
+                if (n <= 31 && progress > 0.6) {
+                    const alpha = (progress - 0.6) / 0.4;
+                    ctx.fillStyle = s.color;
+                    ctx.font = 'bold 9px sans-serif';
+                    ctx.textAlign = 'center';
+                    for (let i = 0; i < n; i++) {
+                        if (s.values[i] === 0) continue;
+                        ctx.globalAlpha = alpha;
+                        ctx.fillText(String(s.values[i]), xAt(i), yAt(animatedValues[i]) - 6);
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+            });
+
+            if (progress < 1) {
+                requestAnimationFrame(render);
+            }
+        }
+        requestAnimationFrame(render);
     }
 
     const labelsPresence = <?= json_encode($abs_labels) ?>;
@@ -524,36 +582,61 @@ require_once __DIR__ . '/inc/header.php';
             { value: <?= $val_data['forcee_censeur'] ?>, color: chartSeances, label: 'Forcées' },
         ];
         const total = data.reduce((s, d) => s + d.value, 0);
-        const { ctx, w, h } = resizeCanvas(canvas);
-        if (total === 0) {
-            ctx.fillStyle = '#8899AA'; ctx.font = '13px sans-serif';
-            ctx.textAlign = 'center'; ctx.fillText('Aucune séance', w/2, h/2);
-            return;
+        const startTime = performance.now();
+        const duration = 1000;
+
+        function render(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            const { ctx, w, h } = resizeCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            if (total === 0) {
+                ctx.fillStyle = '#8899AA'; ctx.font = '13px sans-serif';
+                ctx.textAlign = 'center'; ctx.fillText('Aucune séance', w/2, h/2);
+                return;
+            }
+            const cx = w / 2, cy = h / 2;
+            const radius = Math.min(cx, cy) * 0.82;
+            const inner = radius * 0.6;
+
+            let start = -Math.PI / 2;
+            const totalSweep = Math.PI * 2 * ease;
+            let currentSweep = 0;
+
+            data.forEach(function(d) {
+                const sliceAngle = (d.value / total) * Math.PI * 2;
+                const drawAngle = Math.min(sliceAngle, Math.max(0, totalSweep - currentSweep));
+
+                if (drawAngle > 0) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius, start, start + drawAngle);
+                    ctx.arc(cx, cy, inner, start + drawAngle, start, true);
+                    ctx.closePath();
+                    ctx.fillStyle = d.color;
+                    ctx.fill();
+                }
+                start += sliceAngle;
+                currentSweep += sliceAngle;
+            });
+
+            ctx.globalAlpha = ease;
+            ctx.fillStyle = text;
+            ctx.font = 'bold 24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(Math.floor(total * ease), cx, cy - 6);
+            ctx.fillStyle = '#8899AA';
+            ctx.font = '10px sans-serif';
+            ctx.fillText('séances', cx, cy + 14);
+            ctx.globalAlpha = 1.0;
+
+            if (progress < 1) {
+                requestAnimationFrame(render);
+            }
         }
-        const cx = w / 2, cy = h / 2;
-        const radius = Math.min(cx, cy) * 0.82;
-        const inner = radius * 0.6;
-
-        let start = -Math.PI / 2;
-        data.forEach(function(d) {
-            const angle = (d.value / total) * Math.PI * 2;
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, start, start + angle);
-            ctx.arc(cx, cy, inner, start + angle, start, true);
-            ctx.closePath();
-            ctx.fillStyle = d.color;
-            ctx.fill();
-            start += angle;
-        });
-
-        ctx.fillStyle = text;
-        ctx.font = 'bold 24px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(total, cx, cy - 6);
-        ctx.fillStyle = '#8899AA';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('séances', cx, cy + 14);
+        requestAnimationFrame(render);
     })();
 
     // --- Horizontal Bar Chart (absences by class) ---
@@ -562,49 +645,66 @@ require_once __DIR__ . '/inc/header.php';
         if (!canvas) return;
         const labels = <?= json_encode($abs_classes_labels) ?>;
         const values = <?= json_encode($abs_classes_values) ?>;
-        const { ctx, w, h } = resizeCanvas(canvas);
-        if (labels.length === 0) {
-            ctx.fillStyle = '#8899AA'; ctx.font = '13px sans-serif';
-            ctx.textAlign = 'center'; ctx.fillText('Aucune absence sur la période', w/2, h/2);
-            return;
+        const startTime = performance.now();
+        const duration = 900;
+
+        function render(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+
+            const { ctx, w, h } = resizeCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            if (labels.length === 0) {
+                ctx.fillStyle = '#8899AA'; ctx.font = '13px sans-serif';
+                ctx.textAlign = 'center'; ctx.fillText('Aucune absence sur la période', w/2, h/2);
+                return;
+            }
+            const max = Math.max(...values, 1);
+            const pad = { top: 8, bottom: 8, left: 12, right: 50 };
+            const chartW = w - pad.left - pad.right;
+            const chartH = h - pad.top - pad.bottom;
+            const barH = Math.min(24, chartH / labels.length * 0.65);
+            const gap = chartH / labels.length;
+
+            ctx.font = '11px sans-serif';
+            for (let i = 0; i < labels.length; i++) {
+                const y = pad.top + gap * i + gap/2 + barH/2 - 4;
+                const targetBarW = chartW * Math.min(values[i] / max, 1);
+                const barW = targetBarW * ease;
+                const x = pad.left;
+
+                ctx.fillStyle = chartAbsences + 'CC';
+                const rx = 3;
+                if (barW > 2) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + rx, y);
+                    ctx.lineTo(x + Math.max(rx, barW - rx), y);
+                    ctx.arcTo(x + barW, y, x + barW, y + barH, rx);
+                    ctx.lineTo(x + barW, y + barH);
+                    ctx.arcTo(x + barW, y + barH, x + Math.max(0, barW - rx), y + barH, rx);
+                    ctx.lineTo(x + rx, y + barH);
+                    ctx.arcTo(x, y + barH, x, y + barH - rx, rx);
+                    ctx.lineTo(x, y + rx);
+                    ctx.arcTo(x, y, x + rx, y, rx);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = text;
+                ctx.textAlign = 'right';
+                ctx.fillText(labels[i], x - 6, y + barH/2 + 4);
+
+                ctx.fillStyle = '#8899AA';
+                ctx.textAlign = 'left';
+                ctx.fillText(Math.floor(values[i] * ease), x + barW + 6, y + barH/2 + 4);
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(render);
+            }
         }
-        const max = Math.max(...values, 1);
-        const pad = { top: 8, bottom: 8, left: 12, right: 50 };
-        const chartW = w - pad.left - pad.right;
-        const chartH = h - pad.top - pad.bottom;
-        const barH = Math.min(24, chartH / labels.length * 0.65);
-        const gap = chartH / labels.length;
-
-        ctx.font = '11px sans-serif';
-        ctx.textAlign = 'right';
-        for (let i = 0; i < labels.length; i++) {
-            const y = pad.top + gap * i + gap/2 + barH/2 - 4;
-            const barW = chartW * Math.min(values[i] / max, 1);
-            const x = pad.left;
-
-            ctx.fillStyle = chartAbsences + 'CC';
-            const rx = 3;
-            ctx.beginPath();
-            ctx.moveTo(x + rx, y);
-            ctx.lineTo(x + barW - rx, y);
-            ctx.arcTo(x + barW, y, x + barW, y + barH, rx);
-            ctx.lineTo(x + barW, y + barH);
-            ctx.arcTo(x + barW, y + barH, x + barW - rx, y + barH, rx);
-            ctx.lineTo(x + rx, y + barH);
-            ctx.arcTo(x, y + barH, x, y + barH - rx, rx);
-            ctx.lineTo(x, y + rx);
-            ctx.arcTo(x, y, x + rx, y, rx);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.fillStyle = text;
-            ctx.textAlign = 'right';
-            ctx.fillText(labels[i], x - 6, y + barH/2 + 4);
-
-            ctx.fillStyle = '#8899AA';
-            ctx.textAlign = 'left';
-            ctx.fillText(values[i], x + barW + 6, y + barH/2 + 4);
-        }
+        requestAnimationFrame(render);
     })();
 
     // --- Sélecteur de période ---
@@ -626,8 +726,22 @@ require_once __DIR__ . '/inc/header.php';
         });
     })();
 
+    let resizeTimer;
     window.addEventListener('resize', function() {
-        location.reload();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            drawLineChart('chartTendancePresence', labelsPresence, [
+                { values: <?= json_encode($abs_values) ?>, color: chartAbsences },
+                { values: <?= json_encode($ret_values) ?>, color: chartRetards, dash: true },
+            ]);
+            drawLineChart('chartTendanceSeances', labelsPresence, [
+                { values: <?= json_encode($seances_values) ?>, color: chartSeances },
+                { values: <?= json_encode($validees_values) ?>, color: chartValidees, dash: true },
+            ]);
+            drawLineChart('chartTendancePunitions', labelsPresence, [
+                { values: <?= json_encode($pun_values) ?>, color: chartPunitions },
+            ]);
+        }, 200);
     });
 })();
 </script>

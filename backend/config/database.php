@@ -22,11 +22,26 @@ date_default_timezone_set(APP_TIMEZONE);
 function get_db(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
+        $dsns = [
+            'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+            'mysql:host=127.0.0.1;port=3306;dbname=' . DB_NAME . ';charset=utf8mb4',
+            'mysql:host=localhost;unix_socket=/opt/lampp/var/mysql/mysql.sock;dbname=' . DB_NAME . ';charset=utf8mb4',
+        ];
+        $lastException = null;
+        foreach ($dsns as $dsn) {
+            try {
+                $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]);
+                break;
+            } catch (Exception $e) {
+                $lastException = $e;
+            }
+        }
+        if ($pdo === null) {
+            throw $lastException;
+        }
         $pdo->exec("SET time_zone = '" . APP_TIMEZONE_OFFSET . "'");
     }
     return $pdo;

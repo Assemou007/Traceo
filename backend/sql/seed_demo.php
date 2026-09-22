@@ -23,8 +23,8 @@ $annee = (int)$pdo->query("SELECT id FROM annee_scolaire WHERE etablissement_id 
 if (!$annee) { fwrite(STDERR, "Aucune année scolaire en cours.\n"); exit(1); }
 
 $mdp = password_hash('Demo2026!', PASSWORD_DEFAULT);
-$debut = '2026-05-25';
-$fin = '2026-08-03';
+$fin = date('Y-m-d');
+$debut = date('Y-m-d', strtotime('-60 days'));
 
 echo "Nettoyage des anciennes données (établissement $etab)…\n";
 foreach ([
