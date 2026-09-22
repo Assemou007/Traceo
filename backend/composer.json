@@ -1,0 +1,12 @@
+{
+    "name": "traceo/backend",
+    "description": "Traceo - Backend API (sans framework, sans dépendances)",
+    "require": {
+        "php": ">=8.0"
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "echo 'Traceo ne nécessite aucune dépendance externe.'"
+        ]
+    }
+}

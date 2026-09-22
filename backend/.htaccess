@@ -1,0 +1,3 @@
+# Seulement les sous-dossiers avec leur propre .htaccess sont restreints
+# L'API (api/) est accessible sans restriction
+Satisfy Any

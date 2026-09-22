@@ -1,0 +1,10 @@
+# Désactiver le listing des répertoires
+Options -Indexes
+
+# Protection des fichiers sensibles
+<FilesMatch "\.(sql|md|log|lock)$">
+    Require all denied
+</FilesMatch>
+
+# URL propre : index.php par défaut
+DirectoryIndex index.php
